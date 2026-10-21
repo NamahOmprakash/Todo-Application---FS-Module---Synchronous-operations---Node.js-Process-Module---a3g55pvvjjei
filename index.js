@@ -3,17 +3,21 @@ const path = require('path');
 
 const dbPath = path.join(__dirname, 'db.txt');
 
-const readTodos = () => {
+const ensureDbExists = () => {
   if (!fs.existsSync(dbPath)) {
     fs.writeFileSync(dbPath, '', 'utf8');
-    return [];
   }
+};
+
+const readTodos = () => {
+  ensureDbExists();
   const data = fs.readFileSync(dbPath, 'utf8').trim();
   if (!data) return [];
   const matches = data.match(/\{[\s\S]*?\}/g);
   if (!matches) return [];
   return matches.map((item) => JSON.parse(item));
 };
+
 const writeTodos = (todos) => {
   if (!todos || todos.length === 0) {
     fs.writeFileSync(dbPath, '', 'utf8');
@@ -22,10 +26,9 @@ const writeTodos = (todos) => {
   const content = todos.map((item) => JSON.stringify(item, null, 2)).join('\n') + '\n';
   fs.writeFileSync(dbPath, content, 'utf8');
 };
+
 const getTodosSync = () => {
-  if (!fs.existsSync(dbPath)) {
-    fs.writeFileSync(dbPath, '', 'utf8');
-  }
+  ensureDbExists();
   return fs.readFileSync(dbPath, 'utf8');
 };
 
@@ -36,21 +39,28 @@ const getTodoSync = (id) => {
 };
 
 const createTodoSync = (todo) => {
-  if (!fs.existsSync(dbPath)) {
-    fs.writeFileSync(dbPath, '', 'utf8');
-  }
+  ensureDbExists();
   const now = new Date().toISOString();
-  const title = typeof todo === 'object' && todo !== null ? todo.title : todo;
+
+  let title = todo;
+  if (typeof todo === 'object' && todo !== null && todo.title) {
+    title = todo.title;
+  }
 
   const newTodo = {
     id: Date.now(),
-    title: title,
+    title: title || '',
     isCompleted: false,
     createdAt: now,
     updatedAt: now,
   };
 
-  const formatted = JSON.stringify(newTodo, null, 2) + '\n';
+  const rawData = fs.readFileSync(dbPath, 'utf8');
+  let formatted = JSON.stringify(newTodo, null, 2) + '\n';
+  if (rawData.length > 0 && !rawData.endsWith('\n')) {
+    formatted = '\n' + formatted;
+  }
+
   fs.appendFileSync(dbPath, formatted, 'utf8');
   return newTodo;
 };
