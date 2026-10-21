@@ -3,57 +3,68 @@ const path = require('path');
 
 const dbPath = path.join(__dirname, 'db.txt');
 
-// Helper to ensure db.txt exists
-const ensureDbExists = () => {
+// Ensure db.txt exists only inside functions
+function ensureDb() {
   if (!fs.existsSync(dbPath)) {
     fs.writeFileSync(dbPath, '', 'utf8');
   }
-};
+}
 
-// Helper to parse all JSON objects from db.txt
-const readTodos = () => {
-  ensureDbExists();
-  const data = fs.readFileSync(dbPath, 'utf8').trim();
-  if (!data) return [];
+// Read all todos as objects
+function readAllTodos() {
+  ensureDb();
+  const content = fs.readFileSync(dbPath, 'utf8').trim();
+  if (!content) return [];
 
-  // Match each JSON object { ... }
-  const matches = data.match(/\{[\s\S]*?\}(?=\s*\{|\s*$)/g);
+  // Match each JSON object block { ... }
+  const matches = content.match(/\{[\s\S]*?\}(?=\s*\{|\s*$)/g);
   if (!matches) return [];
 
-  return matches.map((item) => JSON.parse(item));
-};
+  const list = [];
+  for (const m of matches) {
+    try {
+      list.push(JSON.parse(m.trim()));
+    } catch (err) {
+      // ignore malformed items if any
+    }
+  }
+  return list;
+}
 
-// Helper to rewrite all todos to db.txt
-const writeTodos = (todos) => {
+// Overwrite db.txt with the given array of todos
+function writeAllTodos(todos) {
+  ensureDb();
   if (!todos || todos.length === 0) {
     fs.writeFileSync(dbPath, '', 'utf8');
     return;
   }
-  // Join objects by newline as specified in the problem statement
-  const content = todos.map((item) => JSON.stringify(item, null, 2)).join('\n') + '\n';
-  fs.writeFileSync(dbPath, content, 'utf8');
-};
+  const formatted = todos.map((t) => JSON.stringify(t, null, 2)).join('\n');
+  fs.writeFileSync(dbPath, formatted + '\n', 'utf8');
+}
 
-const getTodosSync = () => {
-  ensureDbExists();
+// 1. getTodosSync
+function getTodosSync() {
+  ensureDb();
   return fs.readFileSync(dbPath, 'utf8');
-};
+}
 
-const getTodoSync = (id) => {
-  const todos = readTodos();
-  const todo = todos.find((item) => String(item.id) === String(id));
+// 2. getTodoSync
+function getTodoSync(id) {
+  const todos = readAllTodos();
+  const todo = todos.find((t) => String(t.id) === String(id));
   return todo ? JSON.stringify(todo, null, 2) : null;
-};
+}
 
-const createTodoSync = (todo) => {
-  ensureDbExists();
+// 3. createTodoSync
+function createTodoSync(todoInput) {
+  ensureDb();
   const now = new Date().toISOString();
 
   let title = '';
-  if (typeof todo === 'string') {
-    title = todo;
-  } else if (todo && typeof todo === 'object') {
-    title = todo.title || '';
+  if (typeof todoInput === 'string') {
+    title = todoInput;
+  } else if (todoInput && typeof todoInput === 'object') {
+    title = todoInput.title || '';
   }
 
   const newTodo = {
@@ -64,45 +75,44 @@ const createTodoSync = (todo) => {
     updatedAt: now,
   };
 
-  const currentContent = fs.readFileSync(dbPath, 'utf8');
-  const formattedTodo = JSON.stringify(newTodo, null, 2);
+  const raw = fs.readFileSync(dbPath, 'utf8');
+  const formatted = JSON.stringify(newTodo, null, 2);
 
-  let toAppend = '';
-  if (currentContent.length === 0) {
-    toAppend = formattedTodo + '\n';
-  } else if (currentContent.endsWith('\n')) {
-    toAppend = formattedTodo + '\n';
+  if (!raw || raw.trim().length === 0) {
+    fs.writeFileSync(dbPath, formatted + '\n', 'utf8');
   } else {
-    toAppend = '\n' + formattedTodo + '\n';
+    const separator = raw.endsWith('\n') ? '' : '\n';
+    fs.appendFileSync(dbPath, separator + formatted + '\n', 'utf8');
   }
 
-  fs.appendFileSync(dbPath, toAppend, 'utf8');
   return newTodo;
-};
+}
 
-const updateTodoSync = (id, updates) => {
-  const todos = readTodos();
-  const index = todos.findIndex((item) => String(item.id) === String(id));
+// 4. updateTodoSync
+function updateTodoSync(id, updates) {
+  const todos = readAllTodos();
+  const index = todos.findIndex((t) => String(t.id) === String(id));
 
   if (index !== -1) {
     todos[index] = {
       ...todos[index],
       ...updates,
-      id: todos[index].id, // Ensure ID is never overwritten
+      id: todos[index].id,
       updatedAt: new Date().toISOString(),
     };
-
-    writeTodos(todos);
+    writeAllTodos(todos);
     return todos[index];
   }
   return null;
-};
+}
 
-const deleteTodoSync = (id) => {
-  const todos = readTodos();
-  const remaining = todos.filter((item) => String(item.id) !== String(id));
-  writeTodos(remaining);
-};
+// 5. deleteTodoSync
+function deleteTodoSync(id) {
+  const todos = readAllTodos();
+  const remaining = todos.filter((t) => String(t.id) !== String(id));
+  writeAllTodos(remaining);
+  return remaining;
+}
 
 module.exports = {
   getTodosSync,
